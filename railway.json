@@ -11,4 +11,3 @@
     "restartPolicyMaxRetries": 3
   }
 }
-'@ | Set-Content -Path railway.json -Encoding utf8
