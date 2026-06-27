@@ -119,3 +119,15 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             status_code=500,
             detail=f"Error procesando webhook de Chatwoot: {str(error)}"
         )
+    return {
+    "ignored": False,
+    "source": "chatwoot",
+    "conversation_id": parsed["conversation_id"],
+    "sender_id": parsed["sender_id"],
+    "message_id": parsed["message_id"],
+    "inbox_id": parsed.get("inbox_id"),
+    "channel": parsed.get("channel"),
+    "query": parsed["query"],
+    "response": ai_response,
+    "chatwoot_message_id": chatwoot_response.get("id")
+}

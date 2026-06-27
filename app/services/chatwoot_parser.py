@@ -1,5 +1,7 @@
 import os
 
+import os
+
 
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
     try:
@@ -10,7 +12,8 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
 
         message_type = payload.get("message_type")
 
-        # Chatwoot normalmente manda "incoming", pero a veces puede venir como 0
+        # Chatwoot puede mandar "incoming" arriba,
+        # y a veces 0 en estructuras internas.
         if message_type not in ("incoming", 0):
             return None
 
@@ -37,6 +40,8 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             or (conversation.get("inbox") or {}).get("id")
         )
 
+        channel = conversation.get("channel") or payload.get("channel")
+
         allowed_inboxes = os.getenv("CHATWOOT_ALLOWED_INBOX_IDS", "").strip()
 
         if allowed_inboxes and inbox_id is not None:
@@ -55,8 +60,9 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             "sender_id": sender.get("id"),
             "message_id": payload.get("id"),
             "inbox_id": inbox_id,
+            "channel": channel,
         }
 
     except Exception as error:
-        print("ERROR PARSEANDO CHATWOOT WEBHOOK:", str(error))
+        print("ERROR PARSEANDO CHATWOOT WEBHOOK:", str(error), flush=True)
         return None
