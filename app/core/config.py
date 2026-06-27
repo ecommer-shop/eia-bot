@@ -15,5 +15,7 @@ class Settings:
     chatwoot_account_id: str | None = os.getenv("CHATWOOT_ACCOUNT_ID")
     chatwoot_api_access_token: str | None = os.getenv("CHATWOOT_API_ACCESS_TOKEN")
 
+    valkey_url: str | None = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL")
+
 
 settings = Settings()
