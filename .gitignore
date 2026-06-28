@@ -1,17 +1,21 @@
-# Entorno / secretos
-.env
-.env.*
-!.env.example
+# Entorno virtual
+.venv/
+venv/
 
 # Python
-venv/
-.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.egg-info/
-.pytest_cache/
+
+# Variables de entorno
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
 
 # Sistema
 .DS_Store
