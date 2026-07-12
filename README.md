@@ -1,14 +1,14 @@
-# EIA Bot - FastAPI + Chatwoot + IA/RAG
+# EIA Bot - FastAPI + Chatwoot + eia-rag
 
-Backend en **FastAPI** para conectar los mensajes que llegan a **Chatwoot** desde canales como **WhatsApp** y **Messenger** con un servicio de IA/RAG. El bot recibe eventos de Chatwoot mediante webhook, genera una respuesta con IA y la publica nuevamente en la conversación usando la API de Chatwoot.
+Backend en **FastAPI** para conectar los mensajes que llegan a **Chatwoot** desde canales como **WhatsApp** y **Messenger** con el servicio unificado de IA/RAG (`eia-rag`). El bot recibe eventos de Chatwoot mediante webhook, consulta a eia-rag y publica la respuesta en la conversación.
 
 ## Estado actual
 
 * Desplegado en Railway como servicio `eia-bot`.
 * Integrado con Chatwoot mediante webhook global `message_created`.
 * Compatible con bandejas de entrada de WhatsApp y Messenger desde Chatwoot.
-* Responde usando el servicio de IA configurado por variables de entorno.
-* Puede usar Valkey/Redis como memoria temporal de conversación.
+* Responde usando eia-rag (gateway unificado de RAG + LLM).
+* La memoria conversacional vive en eia-rag (Redis/Valkey), no en eia-bot.
 
 ## Arquitectura
 
@@ -19,14 +19,12 @@ Chatwoot
         ↓ webhook message_created
 FastAPI /api/chatwoot-webhook
         ↓
-IA / RAG / Simetria / Azure
-        ↓
+eia-rag (POST /chat)
+        ↓ clasifica intención + busca en Qdrant + genera respuesta
 FastAPI envía respuesta vía API de Chatwoot
         ↓
 Chatwoot responde al cliente
 ```
-
-Chatwoot sigue siendo la fuente principal del historial real de conversaciones. La memoria en Valkey, cuando se configura, solo se usa como contexto temporal para que la IA recuerde los últimos mensajes de una conversación.
 
 ## Estructura principal
 
@@ -37,16 +35,13 @@ app/
   core/
     config.py                 # Variables de entorno
   schemas/
-    chat.py                   # Esquemas de request/response
+    chat.py                   # RagRequest / RagResponse (contrato con eia-rag)
   services/
-    ai_service.py             # Cliente hacia IA/RAG
+    ai_service.py             # Cliente async hacia eia-rag
     chatwoot_parser.py        # Parser de webhooks de Chatwoot
-    chatwoot_service.py       # Envío de mensajes a Chatwoot
-    memory_service.py         # Memoria temporal con Valkey/Redis
+    chatwoot_service.py       # Envío de mensajes a Chatwoot (async)
     webhook_parser.py         # Parser para webhook directo Messenger/Meta
   main.py                     # App FastAPI
-Dockerfile
-railway.json
 requirements.txt
 ```
 
@@ -56,19 +51,9 @@ requirements.txt
 
 Prueba rápida de salud de la API.
 
-Respuesta esperada:
-
-```json
-{
-  "message": "Hola desde la API"
-}
-```
-
 ### `POST /api/chat`
 
-Prueba directa del modelo/servicio IA.
-
-Ejemplo:
+Prueba directa de eia-rag.
 
 ```json
 {
@@ -76,11 +61,9 @@ Ejemplo:
 }
 ```
 
-También puede soportar `message` o `prompt` si el schema local lo permite.
-
 ### `POST /api/chatwoot-webhook`
 
-Endpoint principal para Chatwoot. Recibe eventos `message_created`, filtra mensajes entrantes, consulta la IA y responde en la misma conversación de Chatwoot.
+Endpoint principal para Chatwoot. Recibe eventos `message_created`, filtra mensajes entrantes, consulta eia-rag y responde en la misma conversación.
 
 URL usada en Railway:
 
@@ -90,11 +73,9 @@ https://eia-bot-production.up.railway.app/api/chatwoot-webhook
 
 ### `POST /api/webhook`
 
-Endpoint para pruebas con webhook directo de Messenger/Meta. Para el flujo real con Chatwoot se recomienda usar `/api/chatwoot-webhook`.
+Endpoint para pruebas con webhook directo de Messenger/Meta.
 
 ## Variables de entorno
-
-Configurar en Railway dentro del servicio `eia-bot`.
 
 ### Chatwoot
 
@@ -104,50 +85,22 @@ CHATWOOT_ACCOUNT_ID=1
 CHATWOOT_API_ACCESS_TOKEN=...
 ```
 
-`CHATWOOT_API_ACCESS_TOKEN` debe ser un token válido de un usuario/agente con acceso a la cuenta y a las bandejas de entrada correspondientes.
-
 ### IA / RAG
 
-Según el servicio usado:
-
 ```env
-SIMETRIA_API_URL=...
-SIMETRIA_API_KEY=...
-RAG_BASE_URL=...
-AZURE_AI_ENDPOINT=...
-AZURE_AI_KEY=...
-AZURE_AI_DEPLOYMENT=...
+EIA_RAG_URL=http://localhost:8000
 ```
 
-No todas son obligatorias al mismo tiempo; dependen de cómo esté implementado `app/services/ai_service.py`.
-
-### Memoria temporal con Valkey/Redis
+En producción (Railway), apuntar a la URL interna de eia-rag:
 
 ```env
-VALKEY_URL=redis://...
+EIA_RAG_URL=http://eia-rag.railway.internal:8000
 ```
-
-o alternativamente:
-
-```env
-REDIS_URL=redis://...
-```
-
-Si no se configura `VALKEY_URL` ni `REDIS_URL`, la API sigue funcionando, pero sin memoria temporal.
 
 ### Filtro opcional por inbox
 
 ```env
 CHATWOOT_ALLOWED_INBOX_IDS=2,4
-```
-
-Usar solo si se quiere limitar el bot a ciertas bandejas. Si se deja vacío o no existe, el bot procesa cualquier inbox que llegue por el webhook.
-
-Ejemplo:
-
-```text
-2 = WhatsApp
-4 = Messenger
 ```
 
 Los IDs se obtienen desde la URL de configuración de cada inbox en Chatwoot:
@@ -159,7 +112,7 @@ Los IDs se obtienen desde la URL de configuración de cada inbox en Chatwoot:
 ## Configuración en Chatwoot
 
 1. Ir a `Ajustes → Integraciones → Webhooks`.
-2. Crear un webhook con esta URL:
+2. Crear un webhook con URL:
 
 ```text
 https://eia-bot-production.up.railway.app/api/chatwoot-webhook
@@ -181,8 +134,6 @@ Ajustes → Entradas
 
 El proyecto usa Dockerfile y `railway.json`.
 
-`Dockerfile` ejecuta la API con Uvicorn:
-
 ```text
 uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
@@ -195,14 +146,17 @@ Railway asigna automáticamente el puerto mediante la variable `PORT`.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+set EIA_RAG_URL=http://localhost:8000
+uvicorn app.main:app --reload --port 8002
 ```
 
 Luego abrir:
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8002/docs
 ```
+
+> eia-rag debe estar corriendo en paralelo.
 
 ## Pruebas recomendadas
 
@@ -235,12 +189,6 @@ POST /api/chat
 eia-bot → Deployments → HTTP Logs
 ```
 
-Debe aparecer:
-
-```text
-POST /api/chatwoot-webhook 200
-```
-
 3. Si aparece `500`, revisar:
 
 ```text
@@ -253,22 +201,10 @@ Buscar:
 === ERROR CHATWOOT WEBHOOK ===
 ```
 
-## Memoria de conversación
-
-El bot puede usar Valkey/Redis para guardar una memoria temporal por `conversation_id`.
-
-Ejemplo de clave:
-
-```text
-eia-bot:chatwoot:conversation:6:messages
-```
-
-La memoria temporal sirve para enviar a la IA los últimos mensajes de la conversación. No reemplaza el historial real de Chatwoot, que se guarda en la base de datos de Chatwoot/Postgres.
-
 ## Notas importantes
 
 * Chatwoot guarda el historial real de conversaciones.
-* Valkey/Redis se usa solo como memoria temporal o caché de contexto.
+* La memoria conversacional vive en eia-rag (Redis/Valkey), no en eia-bot.
 * El webhook debe escuchar `message_created`.
 * Los mensajes salientes del bot deben ser ignorados por el parser para evitar bucles.
 * Si Messenger no responde, revisar el `inbox_id` y la variable `CHATWOOT_ALLOWED_INBOX_IDS`.

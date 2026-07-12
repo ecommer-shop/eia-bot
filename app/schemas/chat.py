@@ -1,20 +1,16 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
-class ChatRequest(BaseModel):
-    query: str | None = Field(default=None, min_length=1)
-    message: str | None = Field(default=None, min_length=1)
-
-    @model_validator(mode="after")
-    def validate_prompt(self):
-        if not self.query and not self.message:
-            raise ValueError("Debes enviar 'query' o 'message'")
-        return self
-
-    @property
-    def prompt(self) -> str:
-        return self.query or self.message
+class RagRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    conversation_id: str
+    inbox_id: int
+    user_id: int | None = None
+    channel: str | None = None
 
 
-class ChatResponse(BaseModel):
-    response: str
+class RagResponse(BaseModel):
+    answer: str
+    intent_detected: str
+    sources_used: int
+    conversation_id: str

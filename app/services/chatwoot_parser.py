@@ -1,7 +1,5 @@
 import os
 
-import os
-
 
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
     try:
@@ -53,6 +51,9 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
 
             if int(inbox_id) not in allowed_ids:
                 return None
+
+        if not inbox_id:
+            return None
 
         return {
             "query": content,
