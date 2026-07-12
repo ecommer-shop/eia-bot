@@ -18,12 +18,6 @@ router = APIRouter(
 
 
 def get_text_from_chat_request(request: ChatRequest) -> str:
-    """
-    Soporta distintos nombres de campo:
-    - query
-    - message
-    - prompt
-    """
     text = (
         getattr(request, "query", None)
         or getattr(request, "message", None)
@@ -48,7 +42,11 @@ def chat(request: ChatRequest):
     try:
         query = get_text_from_chat_request(request)
 
-        response = get_ai_response(query)
+        response = get_ai_response(
+            query,
+            canal="api",
+            tenant_id="ZiRu"
+        )
 
         return ChatResponse(
             response=response
@@ -72,13 +70,10 @@ async def messenger_webhook(payload: dict = Body(...)):
     """
     Webhook directo de Messenger/Meta.
 
-    Ojo:
-    Este endpoint retorna la respuesta, pero Meta no envía automáticamente
-    esa respuesta al usuario solo por devolver JSON.
-    Para responder directo por Meta haría falta usar PAGE_ACCESS_TOKEN.
-
-    Si Messenger entra por Chatwoot, usa /chatwoot-webhook.
+    Este endpoint sirve para simular/probar Messenger desde Swagger.
+    Para producción real con Chatwoot, lo recomendado es usar /chatwoot-webhook.
     """
+
     parsed = parse_messenger_webhook(payload)
 
     if parsed is None:
@@ -93,19 +88,25 @@ async def messenger_webhook(payload: dict = Body(...)):
             or parsed.get("sender_id")
         )
 
+        user_message = parsed["query"]
+
         history = get_conversation_memory(conversation_id)
 
         prompt_with_context = build_context_prompt(
             history=history,
-            current_message=parsed["query"]
+            current_message=user_message
         )
 
-        ai_response = get_ai_response(prompt_with_context)
+        ai_response = get_ai_response(
+            prompt_with_context,
+            canal="facebook",
+            tenant_id="ZiRu"
+        )
 
         add_message_to_memory(
             conversation_id=conversation_id,
             role="user",
-            content=parsed["query"]
+            content=user_message
         )
 
         add_message_to_memory(
@@ -117,8 +118,10 @@ async def messenger_webhook(payload: dict = Body(...)):
         return {
             "ignored": False,
             "source": "messenger_direct",
+            "canal": "facebook",
+            "tenant_id": "ZiRu",
             "sender_id": parsed.get("sender_id"),
-            "query": parsed["query"],
+            "query": user_message,
             "response": ai_response
         }
 
@@ -149,6 +152,8 @@ async def chatwoot_webhook(payload: dict = Body(...)):
         conversation_id = parsed["conversation_id"]
         user_message = parsed["query"]
 
+        canal = parsed.get("canal") or "chatwoot"
+
         history = get_conversation_memory(conversation_id)
 
         prompt_with_context = build_context_prompt(
@@ -156,7 +161,11 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             current_message=user_message
         )
 
-        ai_response = get_ai_response(prompt_with_context)
+        ai_response = get_ai_response(
+            prompt_with_context,
+            canal=canal,
+            tenant_id="ZiRu"
+        )
 
         print("=== AI RESPONSE ===", flush=True)
         print(ai_response, flush=True)
@@ -189,6 +198,8 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             "message_id": parsed.get("message_id"),
             "inbox_id": parsed.get("inbox_id"),
             "channel": parsed.get("channel"),
+            "canal": canal,
+            "tenant_id": "ZiRu",
             "query": user_message,
             "response": ai_response,
             "chatwoot_message_id": chatwoot_response.get("id")
