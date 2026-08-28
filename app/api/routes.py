@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, Body
 
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.ai_service import get_ai_response
-from app.services.webhook_parser import parse_messenger_webhook
 from app.services.chatwoot_parser import parse_chatwoot_webhook
 from app.services.chatwoot_service import send_message_to_chatwoot
 from app.services.memory_service import (
@@ -64,68 +63,6 @@ def chat(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Error al consultar la API de Simetria: {str(error)}"
-        )
-
-
-@router.post("/webhook", summary="Messenger Webhook")
-async def messenger_webhook(payload: dict = Body(...)):
-    """
-    Webhook directo de Messenger/Meta.
-
-    Ojo:
-    Este endpoint retorna la respuesta, pero Meta no envía automáticamente
-    esa respuesta al usuario solo por devolver JSON.
-    Para responder directo por Meta haría falta usar PAGE_ACCESS_TOKEN.
-
-    Si Messenger entra por Chatwoot, usa /chatwoot-webhook.
-    """
-    parsed = parse_messenger_webhook(payload)
-
-    if parsed is None:
-        return {
-            "ignored": True,
-            "reason": "Mensaje vacío, echo o formato inválido"
-        }
-
-    try:
-        conversation_id = (
-            parsed.get("conversation_id")
-            or parsed.get("sender_id")
-        )
-
-        history = get_conversation_memory(conversation_id)
-
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=parsed["query"]
-        )
-
-        ai_response = get_ai_response(prompt_with_context)
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="user",
-            content=parsed["query"]
-        )
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=ai_response
-        )
-
-        return {
-            "ignored": False,
-            "source": "messenger_direct",
-            "sender_id": parsed.get("sender_id"),
-            "query": parsed["query"],
-            "response": ai_response
-        }
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando webhook: {str(error)}"
         )
 
 

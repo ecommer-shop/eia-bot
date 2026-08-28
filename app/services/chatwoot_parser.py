@@ -1,7 +1,5 @@
 import os
 
-import os
-
 
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
     try:
