@@ -1,9 +1,12 @@
-import httpx
+import logging
 
 from app.core.config import settings
+from app.core.http import get_client
+
+logger = logging.getLogger(__name__)
 
 
-def get_ai_response(prompt: str) -> str:
+async def get_ai_response(prompt: str) -> str:
     if not settings.simetria_api_url:
         raise ValueError("No se encontró SIMETRIA_API_URL en el archivo .env")
 
@@ -18,27 +21,21 @@ def get_ai_response(prompt: str) -> str:
         "query": prompt
     }
 
-    response = httpx.post(
+    response = await get_client().post(
         settings.simetria_api_url,
         json=payload,
         headers=headers,
-        timeout=60.0,
+        timeout=settings.ai_timeout_seconds,
     )
 
     response.raise_for_status()
 
     data = response.json()
 
-    if "response" in data:
-        return data["response"]
+    for field in ("response", "answer", "message", "text"):
+        if field in data:
+            return data[field]
 
-    if "answer" in data:
-        return data["answer"]
-
-    if "message" in data:
-        return data["message"]
-
-    if "text" in data:
-        return data["text"]
+    logger.warning("respuesta del RAG sin campo conocido: %s", sorted(data))
 
     return str(data)

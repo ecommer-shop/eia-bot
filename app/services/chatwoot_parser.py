@@ -1,4 +1,7 @@
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
@@ -62,5 +65,5 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
         }
 
     except Exception as error:
-        print("ERROR PARSEANDO CHATWOOT WEBHOOK:", str(error), flush=True)
+        logger.exception("error parseando el webhook de Chatwoot: %s", error)
         return None

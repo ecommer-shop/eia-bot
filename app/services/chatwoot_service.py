@@ -1,9 +1,8 @@
-import httpx
-
 from app.core.config import settings
+from app.core.http import get_client
 
 
-def send_message_to_chatwoot(conversation_id: int, content: str) -> dict:
+async def send_message_to_chatwoot(conversation_id: int, content: str) -> dict:
     url = (
         f"{settings.chatwoot_base_url}/api/v1/accounts/"
         f"{settings.chatwoot_account_id}/conversations/"
@@ -22,11 +21,11 @@ def send_message_to_chatwoot(conversation_id: int, content: str) -> dict:
         "content_type": "text",
     }
 
-    response = httpx.post(
+    response = await get_client().post(
         url,
         json=payload,
         headers=headers,
-        timeout=60.0,
+        timeout=settings.chatwoot_timeout_seconds,
     )
 
     response.raise_for_status()
