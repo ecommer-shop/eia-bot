@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai_service import get_ai_response
+from app.services.ai_service import ask_rag as get_ai_response
 from app.services.chatwoot_parser import parse_chatwoot_webhook
 from app.services.conversation_service import process_message
 from app.services.dedup_service import is_first_delivery

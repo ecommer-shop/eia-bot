@@ -58,10 +58,10 @@ def test_descarta_la_segunda_entrega_del_mismo_mensaje(client, fake_redis, monke
 
 
 def test_no_devuelve_500_aunque_falle_el_rag(client, fake_redis, monkeypatch):
-    async def explota(prompt):
+    async def explota(user_message, history=None):
         raise RuntimeError("RAG caído")
 
-    monkeypatch.setattr("app.services.conversation_service.get_ai_response", explota)
+    monkeypatch.setattr("app.services.conversation_service.generate_reply", explota)
 
     respuesta = client.post("/api/chatwoot-webhook", json=payload(message_id=777))
 

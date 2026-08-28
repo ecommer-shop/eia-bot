@@ -19,6 +19,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _list_env(name: str, default: list[str]) -> list[str]:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    return [v.strip() for v in raw.split("|") if v.strip()]
+
+
 class Settings:
     project_name: str = "Chatbot API"
     version: str = "0.1.0"
@@ -42,6 +49,36 @@ class Settings:
 
     # Ventana para descartar entregas repetidas del mismo mensaje.
     dedup_ttl_seconds: int = _int_env("DEDUP_TTL_SECONDS", 3600)
+
+    # ─── Azure AI Foundry (Phi-4) ──────────────────────────────
+    # Red de seguridad cuando el RAG falla o Groq esta caido/deprecado.
+    # Sin estas variables el bot sigue funcionando, solo sin respaldo.
+    azure_ai_endpoint: str | None = os.getenv("AZURE_AI_ENDPOINT")
+    azure_ai_key: str | None = os.getenv("AZURE_AI_KEY")
+    azure_ai_deployment: str = os.getenv("AZURE_AI_DEPLOYMENT", "Phi-4")
+
+    default_system_prompt: str = os.getenv(
+        "DEFAULT_SYSTEM_PROMPT",
+        "Eres SimetrIA, el asistente virtual de ecommer, una plataforma "
+        "marketplace para emprendimientos colombianos. Ayudas a los clientes "
+        "con dudas frecuentes y preguntas sobre los productos de la tienda. "
+        "Responde siempre en español, de forma amable y concisa. "
+        "No inventes precios ni información que no tengas.",
+    )
+
+    # El RAG devuelve HTTP 200 aunque su LLM haya fallado: el aviso queda
+    # dentro de 'answer'. Estos fragmentos (sin tildes, en minusculas) se
+    # comparan de forma flexible para detectar esa respuesta degradada.
+    rag_fallback_markers: list[str] = _list_env(
+        "RAG_FALLBACK_MARKERS",
+        ["problemas tecnicos en este momento"],
+    )
+
+    fallback_message: str = os.getenv(
+        "FALLBACK_MESSAGE",
+        "Disculpa, tuve un problema técnico procesando tu mensaje. "
+        "¿Podrías intentarlo de nuevo en un momento?",
+    )
 
 
 settings = Settings()

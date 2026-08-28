@@ -8,13 +8,9 @@ ocurre aqui, en segundo plano.
 
 import logging
 
-from app.services.ai_service import get_ai_response
+from app.services.ai_service import generate_reply
 from app.services.chatwoot_service import send_message_to_chatwoot
-from app.services.memory_service import (
-    add_message_to_memory,
-    build_context_prompt,
-    get_conversation_memory,
-)
+from app.services.memory_service import add_message_to_memory, get_conversation_memory
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +21,7 @@ async def process_message(parsed: dict) -> None:
 
     try:
         history = await get_conversation_memory(conversation_id)
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=user_message,
-        )
-        ai_response = await get_ai_response(prompt_with_context)
+        ai_response = await generate_reply(user_message, history)
     except Exception:
         logger.exception(
             "fallo generando la respuesta conversation_id=%s inbox_id=%s",

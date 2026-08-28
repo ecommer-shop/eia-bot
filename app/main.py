@@ -7,6 +7,7 @@ from app.api.routes import router
 from app.core.config import settings
 from app.core.http import close_client
 from app.core.redis import close_redis
+from app.services.ai_service import close_phi4
 
 logging.basicConfig(
     level=settings.log_level,
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     yield
 
     await close_client()
+    await close_phi4()
     await close_redis()
 
 
