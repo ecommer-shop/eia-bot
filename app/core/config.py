@@ -44,7 +44,10 @@ class Settings:
     # Chatwoot corta el webhook a los 5s (WEBHOOK_TIMEOUT) y, si falla, abre la
     # conversacion a un agente humano. El trabajo pesado corre en segundo plano,
     # asi que estos timeouts ya no afectan el tiempo de respuesta del webhook.
-    ai_timeout_seconds: float = _float_env("AI_TIMEOUT_SECONDS", 25.0)
+    # El RAG usa un modelo con razonamiento (gpt-oss-120b): medido en vivo entre
+    # 6s y 30s, así que 40s da margen sin abandonar respuestas que sí iban a
+    # llegar — preferible a caer a Phi-4, que responde sin el contexto del RAG.
+    ai_timeout_seconds: float = _float_env("AI_TIMEOUT_SECONDS", 40.0)
     chatwoot_timeout_seconds: float = _float_env("CHATWOOT_TIMEOUT_SECONDS", 15.0)
 
     # Ventana para descartar entregas repetidas del mismo mensaje.
@@ -71,7 +74,7 @@ class Settings:
     # comparan de forma flexible para detectar esa respuesta degradada.
     rag_fallback_markers: list[str] = _list_env(
         "RAG_FALLBACK_MARKERS",
-        ["problemas tecnicos en este momento"],
+        ["problemas tecnicos en este momento", "no pude generar una respuesta"],
     )
 
     fallback_message: str = os.getenv(

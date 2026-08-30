@@ -74,6 +74,14 @@ def test_una_respuesta_normal_no_se_marca_como_degradada():
     assert ai_service.is_degraded_answer("Claro, hacemos envíos a toda Colombia.") is False
 
 
+def test_detecta_el_nuevo_aviso_de_contenido_vacio_del_rag():
+    # El RAG lo agregó cuando Groq devuelve completion vacía tras agotar el
+    # presupuesto de tokens en razonamiento interno (modelos gpt-oss).
+    aviso = "Lo siento, no pude generar una respuesta en este momento. ¿Podrías reformular tu pregunta?"
+
+    assert ai_service.is_degraded_answer(aviso) is True
+
+
 def test_una_respuesta_vacia_se_trata_como_degradada():
     assert ai_service.is_degraded_answer("") is True
     assert ai_service.is_degraded_answer("   ") is True
