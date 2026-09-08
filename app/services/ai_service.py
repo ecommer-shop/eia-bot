@@ -26,7 +26,7 @@ async def call_eia_rag(
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{settings.eia_rag_url}/chat",
+                f"{settings.eia_rag_url}/agent/chat",
                 json=payload.model_dump(),
             )
             resp.raise_for_status()
