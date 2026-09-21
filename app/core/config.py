@@ -8,14 +8,24 @@ class Settings:
     project_name: str = "Chatbot API"
     version: str = "0.1.0"
 
-    # Chatwoot
-    chatwoot_base_url: str | None = os.getenv("CHATWOOT_BASE_URL")
-    chatwoot_account_id: str | None = os.getenv("CHATWOOT_ACCOUNT_ID")
-    chatwoot_api_access_token: str | None = os.getenv("CHATWOOT_API_ACCESS_TOKEN")
-    chatwoot_allowed_inbox_ids: str | None = os.getenv("CHATWOOT_ALLOWED_INBOX_IDS")
+    simetria_api_url: str | None = (
+        os.getenv("SIMETRIA_API_URL")
+        or os.getenv("EIA_RAG_URL")
+        or os.getenv("RAG_BASE_URL")
+    )
 
-    # IA — eia-rag unificado
-    eia_rag_url: str = os.getenv("EIA_RAG_URL", "http://localhost:8000")
+    simetria_api_key: str | None = os.getenv("SIMETRIA_API_KEY")
+
+    chatwoot_base_url: str | None = os.getenv("CHATWOOT_BASE_URL")
+
+    chatwoot_account_id: str | None = os.getenv("CHATWOOT_ACCOUNT_ID")
+
+    chatwoot_api_access_token: str | None = (
+        os.getenv("CHATWOOT_API_ACCESS_TOKEN")
+        or os.getenv("CHATWOOT_API_TOKEN")
+    )
+
+    valkey_url: str | None = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL")
 
 
 settings = Settings()

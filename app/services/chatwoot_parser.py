@@ -1,44 +1,81 @@
 import os
 
 
+def normalize_chatwoot_channel(channel: str | None) -> str:
+    channel_map = {
+        "Channel::Whatsapp": "whatsapp",
+        "Channel::Instagram": "instagram",
+        "Channel::FacebookPage": "facebook",
+        "Channel::WebWidget": "shop",
+        "Channel::Api": "api",
+    }
+
+    return channel_map.get(channel, "unknown")
+
+
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
     try:
-        event = payload.get("event")
+        body = payload.get("body", payload)
+
+        event = body.get("event")
+        message_type = body.get("message_type")
+        private = body.get("private", False)
+
+        print("DEBUG CHATWOOT EVENT:", event, flush=True)
+        print("DEBUG CHATWOOT MESSAGE TYPE:", message_type, flush=True)
+        print("DEBUG CHATWOOT PRIVATE:", private, flush=True)
 
         if event != "message_created":
+            print("IGNORADO: event no es message_created", event, flush=True)
             return None
 
-        message_type = payload.get("message_type")
-
-        # Chatwoot puede mandar "incoming" arriba,
-        # y a veces 0 en estructuras internas.
-        if message_type not in ("incoming", 0):
+        if private is True:
+            print("IGNORADO: mensaje privado", flush=True)
             return None
 
-        content = (payload.get("content") or "").strip()
+        if message_type not in ("incoming", 0, "0"):
+            print("IGNORADO: message_type no es incoming", message_type, flush=True)
+            return None
+
+        content = (body.get("content") or "").strip()
 
         if not content:
+            print("IGNORADO: content vacío", flush=True)
             return None
 
-        conversation = payload.get("conversation") or {}
-        sender = payload.get("sender") or {}
+        conversation = body.get("conversation") or {}
+        sender = body.get("sender") or {}
+        inbox = body.get("inbox") or conversation.get("inbox") or {}
+        account = body.get("account") or conversation.get("account") or {}
 
         conversation_id = (
             conversation.get("id")
-            or payload.get("conversation_id")
+            or body.get("conversation_id")
         )
 
         if not conversation_id:
+            print("IGNORADO: conversation_id vacío", flush=True)
             return None
 
-        inbox_id = (
-            payload.get("inbox_id")
-            or conversation.get("inbox_id")
-            or (payload.get("inbox") or {}).get("id")
-            or (conversation.get("inbox") or {}).get("id")
+        account_id = (
+            account.get("id")
+            or body.get("account_id")
+            or conversation.get("account_id")
         )
 
-        channel = conversation.get("channel") or payload.get("channel")
+        inbox_id = (
+            body.get("inbox_id")
+            or conversation.get("inbox_id")
+            or inbox.get("id")
+        )
+
+        channel = (
+            conversation.get("channel")
+            or body.get("channel")
+            or inbox.get("channel_type")
+        )
+
+        canal = normalize_chatwoot_channel(channel)
 
         allowed_inboxes = os.getenv("CHATWOOT_ALLOWED_INBOX_IDS", "").strip()
 
@@ -50,18 +87,18 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             }
 
             if int(inbox_id) not in allowed_ids:
+                print("IGNORADO: inbox no permitido", inbox_id, flush=True)
                 return None
-
-        if not inbox_id:
-            return None
 
         return {
             "query": content,
             "conversation_id": conversation_id,
-            "sender_id": sender.get("id"),
-            "message_id": payload.get("id"),
+            "sender_id": sender.get("id") if isinstance(sender, dict) else None,
+            "message_id": body.get("id"),
+            "account_id": account_id,
             "inbox_id": inbox_id,
             "channel": channel,
+            "canal": canal,
         }
 
     except Exception as error:
