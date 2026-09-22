@@ -35,7 +35,9 @@ async def chat(payload: dict = Body(...)):
             account_id=payload.get("account_id"),
         )
 
-        return {"answer": result.answer}
+        return {
+            "answer": result.answer
+        }
 
     except ValueError as error:
         raise HTTPException(
@@ -80,6 +82,7 @@ async def messenger_webhook(payload: dict = Body(...)):
             conversation_id=conversation_id,
             inbox_id=0,
             user_id=parsed.get("sender_id"),
+            channel="messenger_direct",
         )
 
         return {
@@ -110,26 +113,44 @@ async def chatwoot_webhook(payload: dict = Body(...)):
     if parsed is None:
         return {
             "ignored": True,
-            "reason": "Evento no válido, mensaje vacío, mensaje saliente o inbox no permitida"
+            "reason": "Evento no válido, mensaje vacío, mensaje saliente, nota privada o inbox no permitida"
         }
 
     try:
         user_message = parsed["query"]
 
+        account_id = parsed.get("account_id")
+        conversation_id = parsed.get("conversation_id")
+        inbox_id = parsed.get("inbox_id")
+        sender_id = parsed.get("sender_id")
+
+        # Canal normalizado si tu parser lo genera.
+        # Ejemplo: instagram, whatsapp, facebook, shop, api.
+        channel = (
+            parsed.get("canal")
+            or parsed.get("channel")
+            or "chatwoot"
+        )
+
+        # ID único para memoria/RAG.
+        # Así no se mezclan conversaciones de distintas cuentas de Chatwoot.
+        rag_conversation_id = f"chatwoot:{account_id}:{conversation_id}"
+
         result = await call_eia_rag(
             query=user_message,
-            conversation_id=f"chatwoot_{parsed['conversation_id']}",
-            inbox_id=parsed["inbox_id"],
-            user_id=parsed.get("sender_id"),
-            channel=parsed.get("channel"),
-            account_id=parsed.get("account_id"),
+            conversation_id=rag_conversation_id,
+            inbox_id=inbox_id or 0,
+            user_id=sender_id,
+            channel=channel,
+            account_id=account_id,
         )
 
         print("=== AI RESPONSE ===", flush=True)
         print(result.answer, flush=True)
 
         chatwoot_response = await send_message_to_chatwoot(
-            conversation_id=parsed["conversation_id"],
+            account_id=account_id,
+            conversation_id=conversation_id,
             content=result.answer
         )
 
@@ -139,12 +160,14 @@ async def chatwoot_webhook(payload: dict = Body(...)):
         return {
             "ignored": False,
             "source": "chatwoot",
-            "conversation_id": parsed["conversation_id"],
-            "sender_id": parsed.get("sender_id"),
+            "account_id": account_id,
+            "conversation_id": conversation_id,
+            "rag_conversation_id": rag_conversation_id,
+            "sender_id": sender_id,
             "message_id": parsed.get("message_id"),
-            "account_id": parsed.get("account_id"),
-            "inbox_id": parsed.get("inbox_id"),
+            "inbox_id": inbox_id,
             "channel": parsed.get("channel"),
+            "canal": parsed.get("canal"),
             "query": user_message,
             "response": result.answer,
             "chatwoot_message_id": chatwoot_response.get("id")
