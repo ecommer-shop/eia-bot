@@ -1,14 +1,14 @@
-# EIA Bot - FastAPI + Chatwoot + eia-rag
+# EIA Bot - FastAPI + Chatwoot + eia-chat
 
-Backend en **FastAPI** para conectar los mensajes que llegan a **Chatwoot** desde canales como **WhatsApp** y **Messenger** con el servicio unificado de IA/RAG (`eia-rag`). El bot recibe eventos de Chatwoot mediante webhook, consulta a eia-rag y publica la respuesta en la conversación.
+Backend en **FastAPI** para conectar los mensajes que llegan a **Chatwoot** desde canales como **WhatsApp** y **Messenger** con el servicio unificado de IA/RAG (`eia-chat`). El bot recibe eventos de Chatwoot mediante webhook, consulta a eia-chat y publica la respuesta en la conversación.
 
 ## Estado actual
 
 * Desplegado en Railway como servicio `eia-bot`.
 * Integrado con Chatwoot mediante webhook global `message_created`.
 * Compatible con bandejas de entrada de WhatsApp y Messenger desde Chatwoot.
-* Responde usando eia-rag (gateway unificado de RAG + LLM).
-* La memoria conversacional vive en eia-rag (Redis/Valkey), no en eia-bot.
+* Responde usando eia-chat (gateway unificado de RAG + LLM).
+* La memoria conversacional vive en eia-chat (Redis/Valkey), no en eia-bot.
 
 ## Arquitectura
 
@@ -19,7 +19,7 @@ Chatwoot
         ↓ webhook message_created
 FastAPI /api/chatwoot-webhook
         ↓
-eia-rag (POST /chat)
+eia-chat (POST /chat)
         ↓ clasifica intención + busca en Qdrant + genera respuesta
 FastAPI envía respuesta vía API de Chatwoot
         ↓
@@ -35,9 +35,9 @@ app/
   core/
     config.py                 # Variables de entorno
   schemas/
-    chat.py                   # RagRequest / RagResponse (contrato con eia-rag)
+    chat.py                   # RagRequest / RagResponse (contrato con eia-chat)
   services/
-    ai_service.py             # Cliente async hacia eia-rag
+    ai_service.py             # Cliente async hacia eia-chat
     chatwoot_parser.py        # Parser de webhooks de Chatwoot
     chatwoot_service.py       # Envío de mensajes a Chatwoot (async)
     webhook_parser.py         # Parser para webhook directo Messenger/Meta
@@ -53,7 +53,7 @@ Prueba rápida de salud de la API.
 
 ### `POST /api/chat`
 
-Prueba directa de eia-rag.
+Prueba directa de eia-chat.
 
 ```json
 {
@@ -63,7 +63,7 @@ Prueba directa de eia-rag.
 
 ### `POST /api/chatwoot-webhook`
 
-Endpoint principal para Chatwoot. Recibe eventos `message_created`, filtra mensajes entrantes, consulta eia-rag y responde en la misma conversación.
+Endpoint principal para Chatwoot. Recibe eventos `message_created`, filtra mensajes entrantes, consulta eia-chat y responde en la misma conversación.
 
 URL usada en Railway:
 
@@ -91,7 +91,7 @@ CHATWOOT_API_ACCESS_TOKEN=...
 EIA_RAG_URL=http://localhost:8000
 ```
 
-En producción (Railway), apuntar a la URL interna de eia-rag:
+En producción (Railway), apuntar a la URL interna de eia-chat:
 
 ```env
 EIA_RAG_URL=http://eia-rag.railway.internal:8000
@@ -156,7 +156,7 @@ Luego abrir:
 http://127.0.0.1:8002/docs
 ```
 
-> eia-rag debe estar corriendo en paralelo.
+> eia-chat debe estar corriendo en paralelo.
 
 ## Pruebas recomendadas
 
@@ -204,7 +204,7 @@ Buscar:
 ## Notas importantes
 
 * Chatwoot guarda el historial real de conversaciones.
-* La memoria conversacional vive en eia-rag (Redis/Valkey), no en eia-bot.
+* La memoria conversacional vive en eia-chat (Redis/Valkey), no en eia-bot.
 * El webhook debe escuchar `message_created`.
 * Los mensajes salientes del bot deben ser ignorados por el parser para evitar bucles.
 * Si Messenger no responde, revisar el `inbox_id` y la variable `CHATWOOT_ALLOWED_INBOX_IDS`.

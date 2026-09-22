@@ -38,6 +38,8 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             or (conversation.get("inbox") or {}).get("id")
         )
 
+        account_id = (payload.get("account") or {}).get("id")
+
         channel = conversation.get("channel") or payload.get("channel")
 
         allowed_inboxes = os.getenv("CHATWOOT_ALLOWED_INBOX_IDS", "").strip()
@@ -60,6 +62,7 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             "conversation_id": conversation_id,
             "sender_id": sender.get("id"),
             "message_id": payload.get("id"),
+            "account_id": account_id,
             "inbox_id": inbox_id,
             "channel": channel,
         }

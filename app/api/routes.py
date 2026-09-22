@@ -32,6 +32,7 @@ async def chat(payload: dict = Body(...)):
             inbox_id=payload.get("inbox_id", 0),
             user_id=payload.get("user_id"),
             channel=payload.get("channel"),
+            account_id=payload.get("account_id"),
         )
 
         return {"answer": result.answer}
@@ -121,6 +122,7 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             inbox_id=parsed["inbox_id"],
             user_id=parsed.get("sender_id"),
             channel=parsed.get("channel"),
+            account_id=parsed.get("account_id"),
         )
 
         print("=== AI RESPONSE ===", flush=True)
@@ -140,6 +142,7 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             "conversation_id": parsed["conversation_id"],
             "sender_id": parsed.get("sender_id"),
             "message_id": parsed.get("message_id"),
+            "account_id": parsed.get("account_id"),
             "inbox_id": parsed.get("inbox_id"),
             "channel": parsed.get("channel"),
             "query": user_message,

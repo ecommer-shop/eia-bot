@@ -14,10 +14,12 @@ async def call_eia_rag(
     inbox_id: int,
     user_id: int | None = None,
     channel: str | None = None,
+    account_id: int | None = None,
 ) -> RagResponse:
     payload = RagRequest(
         query=query,
         conversation_id=conversation_id,
+        account_id=account_id,
         inbox_id=inbox_id,
         user_id=user_id,
         channel=channel,
