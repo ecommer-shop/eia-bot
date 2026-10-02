@@ -2,10 +2,15 @@ from app.core.config import settings
 from app.core.http import get_client
 
 
-async def send_message_to_chatwoot(conversation_id: int, content: str) -> dict:
+async def send_message_to_chatwoot(
+    conversation_id: int, content: str, account_id: int | str | None = None
+) -> dict:
+    # Los IDs de conversación se repiten entre cuentas: hay que responder en la
+    # cuenta de origen, no en una fija.
+    account = account_id or settings.chatwoot_account_id
     url = (
         f"{settings.chatwoot_base_url}/api/v1/accounts/"
-        f"{settings.chatwoot_account_id}/conversations/"
+        f"{account}/conversations/"
         f"{conversation_id}/messages"
     )
 

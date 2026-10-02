@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 async def process_message(parsed: dict) -> None:
     conversation_id = parsed["conversation_id"]
     user_message = parsed["query"]
+    account_id = parsed.get("account_id")
 
     try:
-        history = await get_conversation_memory(conversation_id)
-        ai_response = await generate_reply(user_message, history)
+        history = await get_conversation_memory(conversation_id, account_id)
+        ai_response = await generate_reply(user_message, history, context=parsed)
     except Exception:
         logger.exception(
             "fallo generando la respuesta conversation_id=%s inbox_id=%s",
@@ -34,6 +35,7 @@ async def process_message(parsed: dict) -> None:
         await send_message_to_chatwoot(
             conversation_id=conversation_id,
             content=ai_response,
+            account_id=account_id,
         )
     except Exception:
         logger.exception(
@@ -42,8 +44,8 @@ async def process_message(parsed: dict) -> None:
         )
         return
 
-    await add_message_to_memory(conversation_id, "user", user_message)
-    await add_message_to_memory(conversation_id, "assistant", ai_response)
+    await add_message_to_memory(conversation_id, "user", user_message, account_id=account_id)
+    await add_message_to_memory(conversation_id, "assistant", ai_response, account_id=account_id)
 
     logger.info(
         "respuesta entregada conversation_id=%s inbox_id=%s channel=%s",

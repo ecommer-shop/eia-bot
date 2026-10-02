@@ -60,7 +60,52 @@ def is_degraded_answer(answer: str) -> bool:
     return any(_normalize(m) in normalizada for m in settings.rag_fallback_markers)
 
 
-async def ask_rag(prompt: str) -> str:
+_CHANNEL_NAMES = {
+    "whatsapp": "whatsapp",
+    "instagram": "instagram",
+    "facebookpage": "messenger",
+    "webwidget": "shop",
+}
+
+
+def normalize_channel(channel: str | None) -> str | None:
+    """'Channel::FacebookPage' -> 'messenger', 'Channel::Whatsapp' -> 'whatsapp'."""
+    if not channel:
+        return None
+    key = str(channel).split("::")[-1].lower()
+    return _CHANNEL_NAMES.get(key, key)
+
+
+def build_rag_payload(message: str, context: dict | None) -> dict:
+    """Mensaje limpio + identidad del comercio.
+
+    El gateway elige la tienda por inbox/cuenta y guarda su propia memoria por
+    conversation_id, asi que no se pega el historial dentro de la consulta (eso
+    ensuciaba la clasificacion y la busqueda). El conversation_id va con la
+    cuenta porque los IDs de Chatwoot se repiten entre cuentas.
+    """
+    payload: dict = {"query": message}
+    context = context or {}
+
+    account_id = context.get("account_id")
+    conversation_id = context.get("conversation_id")
+
+    if account_id is not None:
+        payload["account_id"] = account_id
+    if context.get("inbox_id") is not None:
+        payload["inbox_id"] = context["inbox_id"]
+    if conversation_id is not None:
+        payload["conversation_id"] = (
+            f"{account_id}-{conversation_id}" if account_id is not None else str(conversation_id)
+        )
+    channel = normalize_channel(context.get("channel"))
+    if channel:
+        payload["channel"] = channel
+
+    return payload
+
+
+async def ask_rag(message: str, context: dict | None = None) -> str:
     if not settings.simetria_api_url:
         raise ValueError("No se encontró SIMETRIA_API_URL en el archivo .env")
 
@@ -73,7 +118,7 @@ async def ask_rag(prompt: str) -> str:
 
     response = await get_client().post(
         settings.simetria_api_url,
-        json={"query": prompt},
+        json=build_rag_payload(message, context),
         headers=headers,
         timeout=settings.ai_timeout_seconds,
     )
@@ -113,14 +158,16 @@ async def ask_phi4(user_message: str, history: list[dict] | None = None) -> str:
     return respuesta.choices[0].message.content.strip()
 
 
-async def generate_reply(user_message: str, history: list[dict] | None = None) -> str:
+async def generate_reply(
+    user_message: str,
+    history: list[dict] | None = None,
+    context: dict | None = None,
+) -> str:
     """Devuelve la respuesta para el cliente, con respaldo si el RAG falla."""
-    from app.services.memory_service import build_context_prompt
-
     motivo = None
 
     try:
-        answer = await ask_rag(build_context_prompt(history or [], user_message))
+        answer = await ask_rag(user_message, context)
 
         if not is_degraded_answer(answer):
             return answer

@@ -6,17 +6,18 @@ from app.core.redis import get_redis
 logger = logging.getLogger(__name__)
 
 
-def get_memory_key(conversation_id) -> str:
-    return f"eia-bot:chatwoot:conversation:{conversation_id}:messages"
+def get_memory_key(conversation_id, account_id=None) -> str:
+    scope = f"{account_id}:" if account_id else ""
+    return f"eia-bot:chatwoot:conversation:{scope}{conversation_id}:messages"
 
 
-async def get_conversation_memory(conversation_id) -> list[dict]:
+async def get_conversation_memory(conversation_id, account_id=None) -> list[dict]:
     client = get_redis()
 
     if client is None:
         return []
 
-    key = get_memory_key(conversation_id)
+    key = get_memory_key(conversation_id, account_id)
 
     try:
         raw_items = await client.lrange(key, 0, -1)
@@ -40,14 +41,15 @@ async def add_message_to_memory(
     role: str,
     content: str,
     max_messages: int = 12,
-    ttl_seconds: int = 86400
+    ttl_seconds: int = 86400,
+    account_id=None,
 ) -> None:
     client = get_redis()
 
     if client is None:
         return
 
-    key = get_memory_key(conversation_id)
+    key = get_memory_key(conversation_id, account_id)
 
     item = {
         "role": role,
