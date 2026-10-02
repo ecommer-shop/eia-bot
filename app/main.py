@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.onboarding import router as onboarding_router
 from app.api.routes import router
 from app.core.config import settings
 from app.core.http import close_client
@@ -32,6 +33,7 @@ app = FastAPI(
 )
 
 app.include_router(router)
+app.include_router(onboarding_router)
 
 
 @app.get("/")

@@ -77,6 +77,14 @@ class Settings:
         ["problemas tecnicos en este momento", "no pude generar una respuesta"],
     )
 
+    # --- Onboarding de comercios (pagina interna /onboarding) ---
+    # App ID y Configuration ID de Meta son publicos (viajan en la pagina).
+    # La clave protege el endpoint: sin ella (o si es corta) el onboarding queda apagado.
+    meta_app_id: str | None = os.getenv("META_APP_ID")
+    meta_config_id: str | None = os.getenv("META_CONFIG_ID")
+    meta_api_version: str = os.getenv("META_API_VERSION", "v25.0")
+    onboarding_admin_token: str | None = os.getenv("ONBOARDING_ADMIN_TOKEN")
+
     fallback_message: str = os.getenv(
         "FALLBACK_MESSAGE",
         "Disculpa, tuve un problema técnico procesando tu mensaje. "
