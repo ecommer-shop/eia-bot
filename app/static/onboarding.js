@@ -8,6 +8,10 @@
   var fbReady = false;
   var run = null;
   var runTimer = null;
+  var BLOCKED_HELP =
+    'No se pudo cargar el SDK de Facebook (connect.facebook.net). Causas habituales: ' +
+    'bloqueador de anuncios o rastreadores (Opera GX, Brave, uBlock, Prevención de seguimiento estricta de Edge), ' +
+    'VPN activa, o una red que bloquea Facebook. Prueba en una ventana privada sin extensiones y con la VPN apagada.';
 
   function show(kind, text) {
     statusEl.className = kind;
@@ -28,17 +32,30 @@
     fbReady = true;
     btn.disabled = false;
     btn.textContent = 'Conectar WhatsApp con Meta';
+    statusEl.className = '';
+    statusEl.textContent = '';
   };
 
+  var sdkLoaded = false;
   var sdk = document.createElement('script');
   sdk.src = 'https://connect.facebook.net/en_US/sdk.js';
   sdk.async = true;
   sdk.defer = true;
   sdk.crossOrigin = 'anonymous';
+  sdk.onload = function () { sdkLoaded = true; };
   sdk.onerror = function () {
-    show('err', 'No se pudo cargar el SDK de Facebook. Revisa bloqueadores de anuncios o la conexión.');
+    show('err', BLOCKED_HELP);
   };
+  show('info', 'Cargando el SDK de Meta…');
   document.body.appendChild(sdk);
+
+  // Si Meta no responde, se dice por que en vez de dejar el boton apagado.
+  setTimeout(function () {
+    if (fbReady) return;
+    show('err', sdkLoaded
+      ? 'El SDK de Facebook se descargó pero no terminó de iniciar. Abre la consola del navegador (F12) y envía el error que aparezca.'
+      : BLOCKED_HELP);
+  }, 8000);
 
   function finishRun() {
     run = null;
