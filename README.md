@@ -19,7 +19,7 @@ Chatwoot
         ↓ webhook message_created
 FastAPI /api/chatwoot-webhook
         ↓
-eia-chat (POST /chat)
+eia-chat (POST a SIMETRIA_API_URL)
         ↓ clasifica intención + busca en Qdrant + genera respuesta
 FastAPI envía respuesta vía API de Chatwoot
         ↓
@@ -35,11 +35,11 @@ app/
   core/
     config.py                 # Variables de entorno
   schemas/
-    chat.py                   # RagRequest / RagResponse (contrato con eia-chat)
+    chat.py                   # RagRequest / RagResponse (heredados, ya no se usan)
   services/
-    ai_service.py             # Cliente async hacia eia-chat
-    chatwoot_parser.py        # Parser de webhooks de Chatwoot
-    chatwoot_service.py       # Envío de mensajes a Chatwoot (async)
+    ai_service.py             # Cliente async hacia el servicio de IA (SIMETRIA_API_URL)
+    chatwoot_parser.py        # Parser de webhooks de Chatwoot (+ normalización de canal)
+    chatwoot_service.py       # Envío de mensajes a Chatwoot (multi-cuenta, async)
     webhook_parser.py         # Parser para webhook directo Messenger/Meta
   main.py                     # App FastAPI
 requirements.txt
@@ -88,14 +88,17 @@ CHATWOOT_API_ACCESS_TOKEN=...
 ### IA / RAG
 
 ```env
-EIA_RAG_URL=http://localhost:8000
+SIMETRIA_API_URL=http://localhost:8000
+# SIMETRIA_API_KEY=...   # opcional: header Authorization: Bearer
 ```
 
 En producción (Railway), apuntar a la URL interna de eia-chat:
 
 ```env
-EIA_RAG_URL=http://eia-rag.railway.internal:8000
+SIMETRIA_API_URL=http://eia-rag.railway.internal:8000
 ```
+
+> `SIMETRIA_API_URL` tiene fallback a `EIA_RAG_URL` y `RAG_BASE_URL` (en ese orden).
 
 ### Filtro opcional por inbox
 
@@ -146,7 +149,7 @@ Railway asigna automáticamente el puerto mediante la variable `PORT`.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-set EIA_RAG_URL=http://localhost:8000
+set SIMETRIA_API_URL=http://localhost:8000
 uvicorn app.main:app --reload --port 8002
 ```
 

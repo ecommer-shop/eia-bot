@@ -5,6 +5,21 @@ import httpx
 
 from app.core.config import settings
 
+# 503 de eia-chat = tienda sin clave Bifrost (error de creación/renovación de
+# claves). El cliente ve un mensaje amigable en vez de silencio.
+SIN_CLAVE_BIFROST_MESSAGE = (
+    "¡Gracias por escribir! Estamos presentando un inconveniente técnico "
+    "momentáneamente. Un asistente humano te atenderá muy pronto."
+)
+
+# Timeout o 5xx de eia-chat (Bifrost lento o caído): mismo mensaje amigable.
+TECHNICAL_ISSUE_MESSAGE = SIN_CLAVE_BIFROST_MESSAGE
+
+# Timeout total eia-bot → eia-chat. El pipeline hace 2 llamadas al LLM
+# (clasificar + responder); 90s cubre el caso lento sin dejar al usuario
+# sin respuesta (el fallback amigable cubre el resto).
+EIA_CHAT_TIMEOUT = httpx.Timeout(90.0, connect=5.0)
+
 
 @dataclass
 class EiaRagResponse:
@@ -48,11 +63,43 @@ async def call_eia_rag(
     print("=== EIA RAG PAYLOAD ===", flush=True)
     print(payload, flush=True)
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            settings.simetria_api_url,
-            json=payload,
-            headers=headers,
+    try:
+        async with httpx.AsyncClient(timeout=EIA_CHAT_TIMEOUT) as client:
+            response = await client.post(
+                settings.simetria_api_url,
+                json=payload,
+                headers=headers,
+            )
+    except httpx.TimeoutException as error:
+        print("=== EIA RAG TIMEOUT ===", flush=True)
+        print(str(error), flush=True)
+        return EiaRagResponse(
+            answer=TECHNICAL_ISSUE_MESSAGE,
+            raw={"error": "timeout", "detail": str(error)},
+        )
+
+    if response.status_code == 503:
+        detail = ""
+        try:
+            detail = str(response.json().get("detail") or "")
+        except Exception:
+            detail = response.text[:300]
+
+        print("=== EIA RAG 503 (tienda sin clave Bifrost) ===", flush=True)
+        print(detail, flush=True)
+
+        return EiaRagResponse(
+            answer=SIN_CLAVE_BIFROST_MESSAGE,
+            raw={"error": "sin_clave_bifrost", "detail": detail},
+        )
+
+    if response.status_code >= 500:
+        detail = response.text[:300]
+        print("=== EIA RAG 5xx ===", flush=True)
+        print(f"status={response.status_code} {detail}", flush=True)
+        return EiaRagResponse(
+            answer=TECHNICAL_ISSUE_MESSAGE,
+            raw={"error": "eia_chat_5xx", "status": response.status_code},
         )
 
     response.raise_for_status()
