@@ -11,5 +11,17 @@ dependencies = [
     "openai==1.57.0",
     "pydantic==2.10.3",
     "python-dotenv==1.2.2",
+    "redis>=8.1.0",
     "uvicorn[standard]==0.32.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Alta de comercio en WhatsApp</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#14181f; --muted:#5b6472; --line:#d9dde3; --accent:#1a7f4b; --err:#b42318; --ok:#1a7f4b; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#12151a; --card:#1b1f27; --fg:#eef0f3; --muted:#9aa3b2; --line:#2e3440; --accent:#35b374; --err:#ff8a80; --ok:#35b374; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+    main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 1.35rem; margin: 8px 0 4px; }
+    p.lead { margin: 0 0 20px; color: var(--muted); }
+    form { background: var(--card); border:1px solid var(--line); border-radius: 12px; padding: 20px; }
+    label { display:block; font-weight:600; margin: 14px 0 6px; }
+    label:first-child { margin-top: 0; }
+    input[type=text], input[type=password] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:transparent; color:inherit; font:inherit; }
+    .hint { color: var(--muted); font-size: .875rem; margin: 4px 0 0; }
+    .check { display:flex; gap:10px; align-items:flex-start; margin-top: 16px; font-weight:400; }
+    .check input { margin-top: 5px; }
+    button { margin-top: 20px; width:100%; padding: 12px; border:0; border-radius:8px; background: var(--accent); color:#fff; font: inherit; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    #status { margin-top: 16px; padding: 12px 14px; border-radius: 8px; border:1px solid var(--line); display:none; white-space: pre-wrap; }
+    #status.err { display:block; border-color: var(--err); color: var(--err); }
+    #status.ok { display:block; border-color: var(--ok); color: var(--ok); }
+    #status.info { display:block; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Alta de comercio en WhatsApp</h1>
+    <p class="lead">Uso interno del equipo de ecommer. El comercio completa el registro de Meta en la ventana emergente; esta página envía el resultado a su cuenta de Chatwoot.</p>
+
+    <form id="form" autocomplete="off">
+      <label for="token">Clave de onboarding</label>
+      <input id="token" type="password" required autocomplete="off">
+
+      <label for="account">ID de la cuenta de Chatwoot del comercio</label>
+      <input id="account" type="text" inputmode="numeric" pattern="[0-9]+" required>
+      <p class="hint">Es el número de la URL: /app/accounts/<b>22</b>/...</p>
+
+      <label class="check" for="coex">
+        <input id="coex" type="checkbox" checked>
+        <span>El número ya se usa en la app WhatsApp Business del celular (coexistencia). Desmárcalo si el número es nuevo.</span>
+      </label>
+
+      <button id="go" type="submit" disabled>Cargando Meta…</button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </form>
+  </main>
+
+  <div id="cfg" hidden data-app-id="{{APP_ID}}" data-config-id="{{CONFIG_ID}}" data-version="{{VERSION}}"></div>
+  <script src="/onboarding/static/onboarding.js"></script>
+</body>
+</html>

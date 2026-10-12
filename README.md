@@ -43,11 +43,11 @@ app/
     chatwoot_parser.py        # Parser de webhooks de Chatwoot
     chatwoot_service.py       # Envío de mensajes a Chatwoot
     memory_service.py         # Memoria temporal con Valkey/Redis
-    webhook_parser.py         # Parser para webhook directo Messenger/Meta
   main.py                     # App FastAPI
 Dockerfile
 railway.json
-requirements.txt
+pyproject.toml
+uv.lock
 ```
 
 ## Endpoints
@@ -87,10 +87,6 @@ URL usada en Railway:
 ```text
 https://eia-bot-production.up.railway.app/api/chatwoot-webhook
 ```
-
-### `POST /api/webhook`
-
-Endpoint para pruebas con webhook directo de Messenger/Meta. Para el flujo real con Chatwoot se recomienda usar `/api/chatwoot-webhook`.
 
 ## Variables de entorno
 
@@ -192,10 +188,8 @@ Railway asigna automáticamente el puerto mediante la variable `PORT`.
 ## Probar localmente
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+uv sync
+uv run uvicorn app.main:app --reload
 ```
 
 Luego abrir:

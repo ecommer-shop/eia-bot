@@ -1,6 +1,7 @@
+import logging
 import os
 
-import os
+logger = logging.getLogger(__name__)
 
 
 def parse_chatwoot_webhook(payload: dict) -> dict | None:
@@ -42,6 +43,11 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
 
         channel = conversation.get("channel") or payload.get("channel")
 
+        account_id = (
+            (payload.get("account") or {}).get("id")
+            or payload.get("account_id")
+        )
+
         allowed_inboxes = os.getenv("CHATWOOT_ALLOWED_INBOX_IDS", "").strip()
 
         if allowed_inboxes and inbox_id is not None:
@@ -61,8 +67,9 @@ def parse_chatwoot_webhook(payload: dict) -> dict | None:
             "message_id": payload.get("id"),
             "inbox_id": inbox_id,
             "channel": channel,
+            "account_id": account_id,
         }
 
     except Exception as error:
-        print("ERROR PARSEANDO CHATWOOT WEBHOOK:", str(error), flush=True)
+        logger.exception("error parseando el webhook de Chatwoot: %s", error)
         return None

@@ -1,28 +1,29 @@
 import json
-from redis import Redis
+import logging
 
-from app.core.config import settings
+from app.core.redis import get_redis
 
-
-redis_client = None
-
-if settings.valkey_url:
-    redis_client = Redis.from_url(
-        settings.valkey_url,
-        decode_responses=True
-    )
+logger = logging.getLogger(__name__)
 
 
-def get_memory_key(conversation_id) -> str:
-    return f"eia-bot:chatwoot:conversation:{conversation_id}:messages"
+def get_memory_key(conversation_id, account_id=None) -> str:
+    scope = f"{account_id}:" if account_id else ""
+    return f"eia-bot:chatwoot:conversation:{scope}{conversation_id}:messages"
 
 
-def get_conversation_memory(conversation_id) -> list[dict]:
-    if redis_client is None:
+async def get_conversation_memory(conversation_id, account_id=None) -> list[dict]:
+    client = get_redis()
+
+    if client is None:
         return []
 
-    key = get_memory_key(conversation_id)
-    raw_items = redis_client.lrange(key, 0, -1)
+    key = get_memory_key(conversation_id, account_id)
+
+    try:
+        raw_items = await client.lrange(key, 0, -1)
+    except Exception:
+        logger.exception("no se pudo leer la memoria conversation_id=%s", conversation_id)
+        return []
 
     messages = []
 
@@ -35,26 +36,34 @@ def get_conversation_memory(conversation_id) -> list[dict]:
     return messages
 
 
-def add_message_to_memory(
+async def add_message_to_memory(
     conversation_id,
     role: str,
     content: str,
     max_messages: int = 12,
-    ttl_seconds: int = 86400
+    ttl_seconds: int = 86400,
+    account_id=None,
 ) -> None:
-    if redis_client is None:
+    client = get_redis()
+
+    if client is None:
         return
 
-    key = get_memory_key(conversation_id)
+    key = get_memory_key(conversation_id, account_id)
 
     item = {
         "role": role,
         "content": content
     }
 
-    redis_client.rpush(key, json.dumps(item, ensure_ascii=False))
-    redis_client.ltrim(key, -max_messages, -1)
-    redis_client.expire(key, ttl_seconds)
+    try:
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.rpush(key, json.dumps(item, ensure_ascii=False))
+            pipe.ltrim(key, -max_messages, -1)
+            pipe.expire(key, ttl_seconds)
+            await pipe.execute()
+    except Exception:
+        logger.exception("no se pudo guardar en memoria conversation_id=%s", conversation_id)
 
 
 def build_context_prompt(history: list[dict], current_message: str) -> str:

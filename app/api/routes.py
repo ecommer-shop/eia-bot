@@ -1,39 +1,19 @@
-from fastapi import APIRouter, HTTPException, Body
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai_service import get_ai_response
-from app.services.webhook_parser import parse_messenger_webhook
+from app.services.ai_service import ask_rag as get_ai_response
 from app.services.chatwoot_parser import parse_chatwoot_webhook
-from app.services.chatwoot_service import send_message_to_chatwoot
-from app.services.memory_service import (
-    get_conversation_memory,
-    add_message_to_memory,
-    build_context_prompt,
-)
+from app.services.conversation_service import process_message
+from app.services.dedup_service import is_first_delivery
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api",
     tags=["API"]
 )
-
-
-def get_text_from_chat_request(request: ChatRequest) -> str:
-    """
-    Soporta distintos nombres de campo:
-    - query
-    - message
-    - prompt
-    """
-    text = (
-        getattr(request, "query", None)
-        or getattr(request, "message", None)
-        or getattr(request, "prompt", None)
-    )
-
-    if not text:
-        raise ValueError("Debes enviar 'query', 'message' o 'prompt'")
-
-    return text
 
 
 @router.get("/hello")
@@ -44,11 +24,9 @@ def hello():
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+async def chat(request: ChatRequest):
     try:
-        query = get_text_from_chat_request(request)
-
-        response = get_ai_response(query)
+        response = await get_ai_response(request.prompt)
 
         return ChatResponse(
             response=response
@@ -61,83 +39,34 @@ def chat(request: ChatRequest):
         )
 
     except Exception as error:
+        logger.exception("fallo atendiendo /chat")
+
         raise HTTPException(
             status_code=500,
             detail=f"Error al consultar la API de Simetria: {str(error)}"
         )
 
 
-@router.post("/webhook", summary="Messenger Webhook")
-async def messenger_webhook(payload: dict = Body(...)):
+@router.post("/chatwoot-webhook", summary="Chatwoot Webhook")
+async def chatwoot_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Recibe el evento del Agent Bot y responde de inmediato.
+
+    Chatwoot corta la peticion a los 5 segundos (WEBHOOK_TIMEOUT) y reintenta
+    hasta 3 veces si el bot responde 429 o 500. Por eso este endpoint nunca
+    hace trabajo lento ni devuelve error: valida, encola y responde 200. La
+    consulta al RAG y el envio de la respuesta ocurren en segundo plano.
     """
-    Webhook directo de Messenger/Meta.
+    try:
+        payload = await request.json()
+    except Exception:
+        logger.warning("el cuerpo del webhook no es JSON válido")
 
-    Ojo:
-    Este endpoint retorna la respuesta, pero Meta no envía automáticamente
-    esa respuesta al usuario solo por devolver JSON.
-    Para responder directo por Meta haría falta usar PAGE_ACCESS_TOKEN.
-
-    Si Messenger entra por Chatwoot, usa /chatwoot-webhook.
-    """
-    parsed = parse_messenger_webhook(payload)
-
-    if parsed is None:
         return {
             "ignored": True,
-            "reason": "Mensaje vacío, echo o formato inválido"
+            "reason": "Payload no es JSON válido"
         }
-
-    try:
-        conversation_id = (
-            parsed.get("conversation_id")
-            or parsed.get("sender_id")
-        )
-
-        history = get_conversation_memory(conversation_id)
-
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=parsed["query"]
-        )
-
-        ai_response = get_ai_response(prompt_with_context)
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="user",
-            content=parsed["query"]
-        )
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=ai_response
-        )
-
-        return {
-            "ignored": False,
-            "source": "messenger_direct",
-            "sender_id": parsed.get("sender_id"),
-            "query": parsed["query"],
-            "response": ai_response
-        }
-
-    except Exception as error:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando webhook: {str(error)}"
-        )
-
-
-@router.post("/chatwoot-webhook", summary="Chatwoot Webhook")
-async def chatwoot_webhook(payload: dict = Body(...)):
-    print("=== CHATWOOT WEBHOOK PAYLOAD ===", flush=True)
-    print(payload, flush=True)
 
     parsed = parse_chatwoot_webhook(payload)
-
-    print("=== CHATWOOT PARSED ===", flush=True)
-    print(parsed, flush=True)
 
     if parsed is None:
         return {
@@ -145,60 +74,38 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             "reason": "Evento no válido, mensaje vacío, mensaje saliente o inbox no permitida"
         }
 
-    try:
-        conversation_id = parsed["conversation_id"]
-        user_message = parsed["query"]
+    # El id del mensaje es estable entre reintentos; el delivery id es el
+    # respaldo cuando Chatwoot no lo incluye.
+    delivery_key = str(
+        parsed.get("message_id")
+        or request.headers.get("x-chatwoot-delivery")
+        or ""
+    )
 
-        history = get_conversation_memory(conversation_id)
-
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=user_message
-        )
-
-        ai_response = get_ai_response(prompt_with_context)
-
-        print("=== AI RESPONSE ===", flush=True)
-        print(ai_response, flush=True)
-
-        chatwoot_response = send_message_to_chatwoot(
-            conversation_id=conversation_id,
-            content=ai_response
-        )
-
-        print("=== CHATWOOT SEND RESPONSE ===", flush=True)
-        print(chatwoot_response, flush=True)
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="user",
-            content=user_message
-        )
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=ai_response
+    if delivery_key and not await is_first_delivery(delivery_key):
+        logger.info(
+            "entrega duplicada descartada delivery_key=%s conversation_id=%s",
+            delivery_key,
+            parsed["conversation_id"],
         )
 
         return {
-            "ignored": False,
-            "source": "chatwoot",
-            "conversation_id": conversation_id,
-            "sender_id": parsed.get("sender_id"),
-            "message_id": parsed.get("message_id"),
-            "inbox_id": parsed.get("inbox_id"),
-            "channel": parsed.get("channel"),
-            "query": user_message,
-            "response": ai_response,
-            "chatwoot_message_id": chatwoot_response.get("id")
+            "ignored": True,
+            "reason": "Entrega duplicada"
         }
 
-    except Exception as error:
-        print("=== ERROR CHATWOOT WEBHOOK ===", flush=True)
-        print(str(error), flush=True)
+    background_tasks.add_task(process_message, parsed)
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando webhook de Chatwoot: {str(error)}"
-        )
+    logger.info(
+        "mensaje aceptado conversation_id=%s inbox_id=%s channel=%s",
+        parsed["conversation_id"],
+        parsed.get("inbox_id"),
+        parsed.get("channel"),
+    )
+
+    return {
+        "accepted": True,
+        "conversation_id": parsed["conversation_id"],
+        "inbox_id": parsed.get("inbox_id"),
+        "channel": parsed.get("channel"),
+    }
