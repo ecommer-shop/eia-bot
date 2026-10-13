@@ -1,39 +1,14 @@
 from fastapi import APIRouter, HTTPException, Body
 
-from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai_service import get_ai_response
+from app.services.ai_service import call_eia_rag
 from app.services.webhook_parser import parse_messenger_webhook
 from app.services.chatwoot_parser import parse_chatwoot_webhook
 from app.services.chatwoot_service import send_message_to_chatwoot
-from app.services.memory_service import (
-    get_conversation_memory,
-    add_message_to_memory,
-    build_context_prompt,
-)
 
 router = APIRouter(
     prefix="/api",
     tags=["API"]
 )
-
-
-def get_text_from_chat_request(request: ChatRequest) -> str:
-    """
-    Soporta distintos nombres de campo:
-    - query
-    - message
-    - prompt
-    """
-    text = (
-        getattr(request, "query", None)
-        or getattr(request, "message", None)
-        or getattr(request, "prompt", None)
-    )
-
-    if not text:
-        raise ValueError("Debes enviar 'query', 'message' o 'prompt'")
-
-    return text
 
 
 @router.get("/hello")
@@ -43,16 +18,26 @@ def hello():
     }
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+@router.post("/chat")
+async def chat(payload: dict = Body(...)):
     try:
-        query = get_text_from_chat_request(request)
+        query = payload.get("query") or payload.get("message") or payload.get("prompt")
 
-        response = get_ai_response(query)
+        if not query:
+            raise ValueError("Debes enviar 'query', 'message' o 'prompt'")
 
-        return ChatResponse(
-            response=response
+        result = await call_eia_rag(
+            query=query,
+            conversation_id=payload.get("conversation_id", "test"),
+            inbox_id=payload.get("inbox_id", 0),
+            user_id=payload.get("user_id"),
+            channel=payload.get("channel"),
+            account_id=payload.get("account_id"),
         )
+
+        return {
+            "answer": result.answer
+        }
 
     except ValueError as error:
         raise HTTPException(
@@ -63,7 +48,7 @@ def chat(request: ChatRequest):
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al consultar la API de Simetria: {str(error)}"
+            detail=f"Error al consultar eia-rag: {str(error)}"
         )
 
 
@@ -72,13 +57,10 @@ async def messenger_webhook(payload: dict = Body(...)):
     """
     Webhook directo de Messenger/Meta.
 
-    Ojo:
-    Este endpoint retorna la respuesta, pero Meta no envía automáticamente
-    esa respuesta al usuario solo por devolver JSON.
-    Para responder directo por Meta haría falta usar PAGE_ACCESS_TOKEN.
-
-    Si Messenger entra por Chatwoot, usa /chatwoot-webhook.
+    Este endpoint sirve para simular/probar Messenger desde Swagger.
+    Para producción real con Chatwoot, lo recomendado es usar /chatwoot-webhook.
     """
+
     parsed = parse_messenger_webhook(payload)
 
     if parsed is None:
@@ -88,38 +70,27 @@ async def messenger_webhook(payload: dict = Body(...)):
         }
 
     try:
-        conversation_id = (
+        conversation_id = str(
             parsed.get("conversation_id")
             or parsed.get("sender_id")
         )
 
-        history = get_conversation_memory(conversation_id)
+        user_message = parsed["query"]
 
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=parsed["query"]
-        )
-
-        ai_response = get_ai_response(prompt_with_context)
-
-        add_message_to_memory(
+        result = await call_eia_rag(
+            query=user_message,
             conversation_id=conversation_id,
-            role="user",
-            content=parsed["query"]
-        )
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=ai_response
+            inbox_id=0,
+            user_id=parsed.get("sender_id"),
+            channel="messenger_direct",
         )
 
         return {
             "ignored": False,
             "source": "messenger_direct",
             "sender_id": parsed.get("sender_id"),
-            "query": parsed["query"],
-            "response": ai_response
+            "query": user_message,
+            "response": result.answer
         }
 
     except Exception as error:
@@ -142,55 +113,63 @@ async def chatwoot_webhook(payload: dict = Body(...)):
     if parsed is None:
         return {
             "ignored": True,
-            "reason": "Evento no válido, mensaje vacío, mensaje saliente o inbox no permitida"
+            "reason": "Evento no válido, mensaje vacío, mensaje saliente, nota privada o inbox no permitida"
         }
 
     try:
-        conversation_id = parsed["conversation_id"]
         user_message = parsed["query"]
 
-        history = get_conversation_memory(conversation_id)
+        account_id = parsed.get("account_id")
+        conversation_id = parsed.get("conversation_id")
+        inbox_id = parsed.get("inbox_id")
+        sender_id = parsed.get("sender_id")
 
-        prompt_with_context = build_context_prompt(
-            history=history,
-            current_message=user_message
+        # Canal normalizado si tu parser lo genera.
+        # Ejemplo: instagram, whatsapp, facebook, shop, api.
+        channel = (
+            parsed.get("canal")
+            or parsed.get("channel")
+            or "chatwoot"
         )
 
-        ai_response = get_ai_response(prompt_with_context)
+        # ID único para memoria/RAG.
+        # Así no se mezclan conversaciones de distintas cuentas de Chatwoot.
+        rag_conversation_id = f"chatwoot:{account_id}:{conversation_id}"
+
+        result = await call_eia_rag(
+            query=user_message,
+            conversation_id=rag_conversation_id,
+            inbox_id=inbox_id or 0,
+            user_id=sender_id,
+            channel=channel,
+            account_id=account_id,
+        )
 
         print("=== AI RESPONSE ===", flush=True)
-        print(ai_response, flush=True)
+        print(result.answer, flush=True)
 
-        chatwoot_response = send_message_to_chatwoot(
+        chatwoot_response = await send_message_to_chatwoot(
+            account_id=account_id,
             conversation_id=conversation_id,
-            content=ai_response
+            content=result.answer
         )
 
         print("=== CHATWOOT SEND RESPONSE ===", flush=True)
         print(chatwoot_response, flush=True)
 
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="user",
-            content=user_message
-        )
-
-        add_message_to_memory(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=ai_response
-        )
-
         return {
             "ignored": False,
             "source": "chatwoot",
+            "account_id": account_id,
             "conversation_id": conversation_id,
-            "sender_id": parsed.get("sender_id"),
+            "rag_conversation_id": rag_conversation_id,
+            "sender_id": sender_id,
             "message_id": parsed.get("message_id"),
-            "inbox_id": parsed.get("inbox_id"),
+            "inbox_id": inbox_id,
             "channel": parsed.get("channel"),
+            "canal": parsed.get("canal"),
             "query": user_message,
-            "response": ai_response,
+            "response": result.answer,
             "chatwoot_message_id": chatwoot_response.get("id")
         }
 
