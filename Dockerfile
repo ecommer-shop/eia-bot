@@ -11,5 +11,8 @@ RUN uv sync --frozen --no-dev
 
 COPY app ./app
 
+# uv instala en /app/.venv; sin esto "uvicorn" a secas no existe (railway.json lo invoca asi).
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Railway inyecta el puerto en $PORT
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
