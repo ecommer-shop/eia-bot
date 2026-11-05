@@ -34,7 +34,15 @@ async def call_eia_rag(
     user_id: int | str | None = None,
     channel: str | None = None,
     account_id: int | str | None = None,
+    chatwoot_conversation_id: int | str | None = None,
 ) -> EiaRagResponse:
+    """Llama al pipeline de eia-chat.
+
+    `conversation_id` es la clave de memoria (`chatwoot:{account}:{id}`).
+    `chatwoot_conversation_id` es el entero puro del `conversation.id` de
+    Chatwoot: eia-chat lo usa SOLO para resolver la identidad del comprador
+    (carrito/pedido). Si no viene, esas tools degradan sin romper el turno.
+    """
     if not settings.simetria_api_url:
         raise ValueError("No se encontró SIMETRIA_API_URL, EIA_RAG_URL o RAG_BASE_URL")
 
@@ -59,6 +67,9 @@ async def call_eia_rag(
 
     if account_id is not None:
         payload["account_id"] = int(account_id)
+
+    if chatwoot_conversation_id is not None:
+        payload["chatwoot_conversation_id"] = int(chatwoot_conversation_id)
 
     print("=== EIA RAG PAYLOAD ===", flush=True)
     print(payload, flush=True)
@@ -127,6 +138,7 @@ async def get_ai_response(
     user_id: int | str | None = None,
     channel: str | None = None,
     account_id: int | str | None = None,
+    chatwoot_conversation_id: int | str | None = None,
 ) -> str:
     result = await call_eia_rag(
         query=prompt,
@@ -135,6 +147,7 @@ async def get_ai_response(
         user_id=user_id,
         channel=channel,
         account_id=account_id,
+        chatwoot_conversation_id=chatwoot_conversation_id,
     )
 
     return result.answer

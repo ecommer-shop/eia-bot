@@ -136,6 +136,14 @@ async def chatwoot_webhook(payload: dict = Body(...)):
         # Así no se mezclan conversaciones de distintas cuentas de Chatwoot.
         rag_conversation_id = f"chatwoot:{account_id}:{conversation_id}"
 
+        # Entero puro del `conversation.id` de Chatwoot: eia-chat lo usa para
+        # resolver la identidad del comprador (carrito/pedido). Si no se puede
+        # convertir, se omite y las tools de identidad degradan solas.
+        try:
+            chatwoot_conversation_id = int(conversation_id)
+        except (TypeError, ValueError):
+            chatwoot_conversation_id = None
+
         result = await call_eia_rag(
             query=user_message,
             conversation_id=rag_conversation_id,
@@ -143,6 +151,7 @@ async def chatwoot_webhook(payload: dict = Body(...)):
             user_id=sender_id,
             channel=channel,
             account_id=account_id,
+            chatwoot_conversation_id=chatwoot_conversation_id,
         )
 
         print("=== AI RESPONSE ===", flush=True)
