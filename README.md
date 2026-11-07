@@ -212,3 +212,18 @@ Buscar:
 * Los mensajes salientes del bot deben ser ignorados por el parser para evitar bucles.
 * Si Messenger no responde, revisar el `inbox_id` y la variable `CHATWOOT_ALLOWED_INBOX_IDS`.
 * Si falla el envío a Chatwoot, revisar `CHATWOOT_API_ACCESS_TOKEN`, `CHATWOOT_ACCOUNT_ID` y `CHATWOOT_BASE_URL`.
+
+## Verificación de peticiones entrantes (opcional)
+
+Dos variables de entorno, ambas **vacías por defecto** (vacía = comportamiento anterior, sin verificar):
+
+| Variable | Qué protege | Cómo |
+|---|---|---|
+| `CHATWOOT_WEBHOOK_SECRET` | `POST /api/chatwoot-webhook` | Valida la firma `X-Chatwoot-Signature: sha256=<hmac>` que Chatwoot añade cuando el webhook tiene un secreto (HMAC-SHA256 de `<timestamp>.<cuerpo>`, con `X-Chatwoot-Timestamp` dentro de ±5 minutos). |
+| `BOT_API_KEY` | `POST /api/chat` y `POST /api/webhook` (endpoints de prueba) | Exige la cabecera `X-API-Key`. |
+
+`/health` y `/` siguen abiertos. Un rechazo responde `401 {"detail":"No autorizado"}` sin indicar el motivo.
+
+**Antes de definir `CHATWOOT_WEBHOOK_SECRET`:** todos los webhooks de Chatwoot que apunten al bot (y los que cree el alta automática de tiendas) deben tener configurado **ese mismo secreto**, o Chatwoot dejará de entregar mensajes al bot. Activar primero en stage.
+
+Pruebas: `uv run --with pytest python -m pytest tests` (no modifica `pyproject.toml` ni `uv.lock`).

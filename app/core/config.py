@@ -27,5 +27,11 @@ class Settings:
 
     valkey_url: str | None = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL")
 
+    # Verificación de peticiones entrantes. Vacías = sin verificar (despliegue gradual).
+    # Secreto con el que Chatwoot firma sus webhooks (campo "secret" del webhook).
+    chatwoot_webhook_secret: str | None = os.getenv("CHATWOOT_WEBHOOK_SECRET")
+    # Clave para los endpoints de prueba /api/chat y /api/webhook (cabecera X-API-Key).
+    bot_api_key: str | None = os.getenv("BOT_API_KEY")
+
 
 settings = Settings()
