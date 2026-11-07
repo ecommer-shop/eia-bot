@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, Body, Depends, HTTPException
 
+from app.core.security import require_bot_api_key, verify_chatwoot_signature
 from app.services.ai_service import call_eia_rag
 from app.services.webhook_parser import parse_messenger_webhook
 from app.services.chatwoot_parser import parse_chatwoot_webhook
@@ -18,7 +19,7 @@ def hello():
     }
 
 
-@router.post("/chat")
+@router.post("/chat", dependencies=[Depends(require_bot_api_key)])
 async def chat(payload: dict = Body(...)):
     try:
         query = payload.get("query") or payload.get("message") or payload.get("prompt")
@@ -52,7 +53,7 @@ async def chat(payload: dict = Body(...)):
         )
 
 
-@router.post("/webhook", summary="Messenger Webhook")
+@router.post("/webhook", summary="Messenger Webhook", dependencies=[Depends(require_bot_api_key)])
 async def messenger_webhook(payload: dict = Body(...)):
     """
     Webhook directo de Messenger/Meta.
@@ -100,7 +101,7 @@ async def messenger_webhook(payload: dict = Body(...)):
         )
 
 
-@router.post("/chatwoot-webhook", summary="Chatwoot Webhook")
+@router.post("/chatwoot-webhook", summary="Chatwoot Webhook", dependencies=[Depends(verify_chatwoot_signature)])
 async def chatwoot_webhook(payload: dict = Body(...)):
     print("=== CHATWOOT WEBHOOK PAYLOAD ===", flush=True)
     print(payload, flush=True)
